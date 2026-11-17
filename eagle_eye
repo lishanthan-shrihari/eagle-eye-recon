@@ -1,21 +1,20 @@
 #!/bin/bash
 
-# --- EAGLE EYE BANNER ---
+# --- EAGLE-EYE BANNER ---
 echo "███████╗ █████╗  ██████╗ ██╗     ███████╗    ███████╗██╗   ██╗███████╗"
 echo "██╔════╝██╔══██╗██╔════╝ ██║     ██╔════╝    ██╔════╝██║   ██║██╔════╝"
 echo "█████╗  ███████║██║  ███╗██║     █████╗      █████╗  ██║   ██║█████╗  "
 echo "██╔══╝  ██╔══██║██║   ██║██║     ██╔══╝      ██╔══╝  ╚██╗ ██╔╝██╔══╝  "
 echo "███████╗██║  ██║╚██████╔╝███████╗███████╗    ███████╗ ╚████╔╝ ███████╗"
-echo "                         v1.0 (Unified Engine)"
-echo "                  [ Created in Void Labs by knull ]"
+echo "                         [ Created in Void Labs by knull ]"
 echo "-------------------------------------------------------------------------"
 
-# 1. Interactive Target Prompt
-echo -n "please enter your target > "
+# 1. Interactive Target Prompt (Requires root domain like yamaha-motor.com)
+echo -n "Enter root target domain (e.g., yamaha-motor.com) > "
 read DOMAIN
 
 if [ -z "$DOMAIN" ]; then
-    echo "[-] Error: No target provided. Exiting."
+    echo "[-] Error: No domain provided. Exiting."
     exit 1
 fi
 
@@ -79,31 +78,38 @@ esac
 OUTPUT_DIR="recon_$DOMAIN"
 mkdir -p "$OUTPUT_DIR"
 
-echo "[+] Starting reconnaissance pipeline for: $DOMAIN"
+echo ""
+echo "[+] Target set to: $DOMAIN"
+echo "[+] Results will be saved in: $OUTPUT_DIR/"
 
-# --- Phase 1: Passive Subdomain Enumeration ---
-echo "[*] Phase 1: Gathering passive subdomains..."
-subfinder -d "$DOMAIN" -silent > "$OUTPUT_DIR/subdomains_passive.txt"
-echo "[+] Found $(wc -l < "$OUTPUT_DIR/subdomains_passive.txt") passive subdomains."
+# --- Phase 1: Passive Subdomain Discovery ---
+echo "[*] Phase 1: Running subfinder for passive subdomain discovery..."
+subfinder -d "$DOMAIN" -silent -o "$OUTPUT_DIR/subdomains_passive.txt"
+echo "[+] Found $(wc -l < "$OUTPUT_DIR/subdomains_passive.txt") subdomains."
 
-# --- Phase 2: Active Resolution & Wildcard Filtering ---
-echo "[*] Phase 2: Resolving active subdomains with dnsx..."
-cat "$OUTPUT_DIR/subdomains_passive.txt" | dnsx -silent -resp-only > "$OUTPUT_DIR/subdomains_resolved.txt"
-echo "[+] Active resolved subdomains: $(wc -l < "$OUTPUT_DIR/subdomains_resolved.txt")"
+# --- Phase 2: DNS Resolution ---
+echo "[*] Phase 2: Resolving active subdomains..."
+cat "$OUTPUT_DIR/subdomains_passive.txt" | dnsx -silent -a -resp-only > "$OUTPUT_DIR/hosts_for_nmap.txt"
+cat "$OUTPUT_DIR/subdomains_passive.txt" | dnsx -silent > "$OUTPUT_DIR/subdomains_resolved.txt"
+echo "[+] Active host and IP resolution complete."
 
-# --- Phase 3: Live HTTP Probing & Tech Profiling ---
-echo "[*] Phase 3: Probing live HTTP/HTTPS services with httpx..."
-cat "$OUTPUT_DIR/subdomains_resolved.txt" | httpx -silent -status-code -tech-detect -title -output "$OUTPUT_DIR/live_web_assets.txt"
-echo "[+] Live web assets saved to $OUTPUT_DIR/live_web_assets.txt"
+# --- Phase 3: HTTP Probing & Clean Pipeline Generation ---
+echo "[*] Phase 3: Probing live web servers with httpx..."
 
-# --- Phase 4: Targeted Port Scanning on Live Hosts ---
-echo "[*] Phase 4: Running Nmap SYN scan on discovered live hosts..."
-sed 's#https\?://##' "$OUTPUT_DIR/live_web_assets.txt" | awk '{print $1}' | sort -u > "$OUTPUT_DIR/hosts_for_nmap.txt"
+# 1. Human-readable audit log (with status codes, tech stack, and metadata)
+cat "$OUTPUT_DIR/subdomains_passive.txt" | httpx -silent -status-code -tech-detect -o "$OUTPUT_DIR/live_web_assets.txt"
 
-if [ "$NMAP_PORTS" = "-" ]; then
-    nmap -iL "$OUTPUT_DIR/hosts_for_nmap.txt" -p- -T4 --open -oN "$OUTPUT_DIR/nmap_scan_results.txt"
+# 2. Machine-readable clean domain list (FOR PROJECT 2 / DEEP_HARVEST INPUT)
+cat "$OUTPUT_DIR/subdomains_passive.txt" | httpx -silent > "$OUTPUT_DIR/live_domains_for_harvest.txt"
+echo "[+] Clean live domain list generated: $OUTPUT_DIR/live_domains_for_harvest.txt"
+
+# --- Phase 4: Executing Nmap Port Scanning Based on User Selection ---
+if [ -s "$OUTPUT_DIR/hosts_for_nmap.txt" ]; then
+    echo "[*] Running Nmap port scan using selected profile..."
+    nmap --privileged -iL "$OUTPUT_DIR/hosts_for_nmap.txt" -p "$NMAP_PORTS" -T4 --open -oN "$OUTPUT_DIR/nmap_scan_results.txt"
+    echo "[+] Nmap scan complete. Results saved to $OUTPUT_DIR/nmap_scan_results.txt"
 else
-    nmap -iL "$OUTPUT_DIR/hosts_for_nmap.txt" -p "$NMAP_PORTS" -T4 --open -oN "$OUTPUT_DIR/nmap_scan_results.txt"
+    echo "[-] No hosts found for Nmap scanning."
 fi
 
-echo "[+] Reconnaissance pipeline complete! All artifacts stored in /$OUTPUT_DIR"
+echo "[+] Eagle-Eye perimeter discovery complete! All files ready in '$OUTPUT_DIR/'"
