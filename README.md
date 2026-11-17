@@ -1,28 +1,35 @@
-# 🦅 Eagle Eye: Automated Reconnaissance & Attack Surface Mapping Pipeline
+# 🦅 Eagle-Eye: Automated Perimeter Reconnaissance Pipeline
 
-[![Bash](https://img.shields.io/badge/Language-Bash-blue.svg)](https://www.gnu.org/software/bash/)
-[![Security](https://img.shields.io/badge/Domain-Web%20Application%20Penetration%20Testing-red.svg)]()
-[![Void Labs](https://img.shields.io/badge/Created%20By-Void%20Labs%20%2F%20Knull-purple.svg)]()
+**Eagle-Eye** is a robust, menu-driven Bash reconnaissance framework developed in **Void Labs** designed to automate the outer perimeter discovery phase for web application penetration testing and bug bounty hunting. 
 
-> *An automated, modular reconnaissance framework designed to eliminate manual overhead during initial target scoping, combining passive intelligence gathering with active HTTP probing and safety-engineered port scanning.*
+It implements a structured first-principles methodology—separating human-readable audit logs from machine-readable clean input streams for seamless tool chaining.
 
 ---
 
-## 🛠️ Architecture & Workflow
-Eagle Eye operates on a disciplined 4-phase reconnaissance lifecycle:
-1. **Passive Subdomain Enumeration (`subfinder`):** Queries Certificate Transparency (CT) logs (`crt.sh`) to harvest historical asset records without touching the target's perimeter infrastructure.
-2. **DNS Hygiene & Resolution (`dnsx`):** Validates raw records against active resolvers, eliminating wildcard DNS traps and returning strictly live IPv4/IPv6 endpoints.
-3. **HTTP Probing & Fingerprinting (`httpx`):** Probes live assets to extract HTTP status codes, page titles, and backend technology stacks (e.g., Nginx, React, WordPress).
-4. **Targeted Port Mapping (`nmap`):** Translates live web hosts into clean target lists, feeding them into a tiered Nmap engine with built-in safety controls.
+## 🚀 Key Features
+
+* **Interactive Scan Intensity Selector**: Upfront configuration menu allowing operators to choose scan scopes with built-in safety controls.
+* **15-Second Safety Countdown & Visual Loading Bar**: Prevents accidental heavy scans against unauthorized targets by incorporating a warning timer and visual progress bar with `Ctrl+C` abort functionality.
+* **Dual-Mode Output Architecture**:
+  * *Human-Readable Logs*: Captures full HTTP status codes, server technologies, and WAF headers (`live_web_assets.txt`).
+  * *Machine-Readable Streams*: Strips all unnecessary metadata into a clean URI list (`live_domains_for_harvest.txt`) built specifically to feed downstream tools like **Project 2 (`deep_harvest`)**.
+* **Multi-Stage Reconnaissance Flow**: Fully automates passive subdomain harvesting (`subfinder`), active DNS resolution (`dnsx`), HTTP probing (`httpx`), and targeted port scanning (`nmap`).
 
 ---
 
-## ⚙️ Key Technical Features
-* **Tiered Intensity Menu:** Built-in safety selection allowing operators to choose between standard web ports (`80, 443, 8080, 8443, 3000`), top 1000 common ports (`1-1000`), or a full ultra scan (`-p-`).
-* **Safety-Engineered Abort Window:** Features a dynamic 15-second animated countdown warning on heavy scans, giving operators a critical window to abort (`Ctrl+C`) before triggering client IDSs or rate limits.
-* **Modular Artifact Management:** Automatically organizes scan outputs into dedicated, structured directories (`recon_<target>/`) for clean reporting.
+## 🛠️ Pipeline Architecture & Workflow
 
----
+```text
+ [Target Domain] 
+        │
+        ├──► Phase 1: Passive Discovery (subfinder) ──► subdomains_passive.txt
+        │
+        ├──► Phase 2: DNS Resolution (dnsx) ─────────► hosts_for_nmap.txt / subdomains_resolved.txt
+        │
+        ├──► Phase 3: HTTP Probing (httpx) ──────────► live_web_assets.txt (Audit Log)
+        │                                            └─► live_domains_for_harvest.txt (Project 2 Input)
+        │
+        └──► Phase 4: Port Scanning (nmap) ──────────► nmap_scan_results.txt
 
 ## 🚀 Installation & Usage
 
