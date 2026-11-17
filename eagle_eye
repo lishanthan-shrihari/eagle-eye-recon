@@ -1,0 +1,109 @@
+#!/bin/bash
+
+# --- EAGLE EYE BANNER ---
+echo "███████╗ █████╗  ██████╗ ██╗     ███████╗    ███████╗██╗   ██╗███████╗"
+echo "██╔════╝██╔══██╗██╔════╝ ██║     ██╔════╝    ██╔════╝██║   ██║██╔════╝"
+echo "█████╗  ███████║██║  ███╗██║     █████╗      █████╗  ██║   ██║█████╗  "
+echo "██╔══╝  ██╔══██║██║   ██║██║     ██╔══╝      ██╔══╝  ╚██╗ ██╔╝██╔══╝  "
+echo "███████╗██║  ██║╚██████╔╝███████╗███████╗    ███████╗ ╚████╔╝ ███████╗"
+echo "                         v1.0 (Unified Engine)"
+echo "                  [ Created in Void Labs by knull ]"
+echo "-------------------------------------------------------------------------"
+
+# 1. Interactive Target Prompt
+echo -n "please enter your target > "
+read DOMAIN
+
+if [ -z "$DOMAIN" ]; then
+    echo "[-] Error: No target provided. Exiting."
+    exit 1
+fi
+
+# 2. Scan Mode Selection Menu
+echo ""
+echo "Select your scan intensity:"
+echo "  [1] Normal Scan (Standard Web Ports: 80, 443, 8080, 8443, 3000)"
+echo "  [2] 1000 Port Scan (Top 1000 common ports)"
+echo "  [3] Ultra Scan (Full Port Scan - All 65,535 ports)"
+echo -n "Select option [1-3] > "
+read MODE
+
+# Function for the 15-second loading bar warning
+run_warning_countdown() {
+    local scan_type=$1
+    echo "=================================================="
+    echo " [!] WARNING: HEAVY PORT SCAN INTRODUCED [!]"
+    echo " This version will scan $scan_type."
+    echo " Press CTRL+C within 15 seconds to abort."
+    echo "=================================================="
+    echo "This may trigger client's Intrusion Detection System (IDS), blow up their rate limits, or crash a fragile server."
+    
+    total_time=15
+    for ((i=total_time; i>=1; i--)); do
+        completed=$((total_time - i + 1))
+        bar=""
+        for ((j=1; j<=total_time; j++)); do
+            if [ $j -le $completed ]; then
+                bar="${bar}#"
+            else
+                bar="${bar}."
+            fi
+        done
+        printf "\r[+] Starting in [%s] %2d seconds remaining..." "$bar" "$i"
+        sleep 1
+    done
+    echo -e "\n"
+}
+
+# 3. Handle Menu Selection Logic
+case $MODE in
+    1)
+        echo "[+] Mode 1 selected: Normal Web Scan (No delay)."
+        NMAP_PORTS="80,443,8080,8443,3000"
+        ;;
+    2)
+        run_warning_countdown "1,000 ports per host"
+        NMAP_PORTS="1-1000"
+        ;;
+    3)
+        run_warning_countdown "65,535 ports per host (Full Scan)"
+        NMAP_PORTS="-"
+        ;;
+    *)
+        echo "[-] Invalid selection. Defaulting to Normal Web Scan (Mode 1)."
+        NMAP_PORTS="80,443,8080,8443,3000"
+        ;;
+esac
+
+# Setup output directory
+OUTPUT_DIR="recon_$DOMAIN"
+mkdir -p "$OUTPUT_DIR"
+
+echo "[+] Starting reconnaissance pipeline for: $DOMAIN"
+
+# --- Phase 1: Passive Subdomain Enumeration ---
+echo "[*] Phase 1: Gathering passive subdomains..."
+subfinder -d "$DOMAIN" -silent > "$OUTPUT_DIR/subdomains_passive.txt"
+echo "[+] Found $(wc -l < "$OUTPUT_DIR/subdomains_passive.txt") passive subdomains."
+
+# --- Phase 2: Active Resolution & Wildcard Filtering ---
+echo "[*] Phase 2: Resolving active subdomains with dnsx..."
+cat "$OUTPUT_DIR/subdomains_passive.txt" | dnsx -silent -resp-only > "$OUTPUT_DIR/subdomains_resolved.txt"
+echo "[+] Active resolved subdomains: $(wc -l < "$OUTPUT_DIR/subdomains_resolved.txt")"
+
+# --- Phase 3: Live HTTP Probing & Tech Profiling ---
+echo "[*] Phase 3: Probing live HTTP/HTTPS services with httpx..."
+cat "$OUTPUT_DIR/subdomains_resolved.txt" | httpx -silent -status-code -tech-detect -title -output "$OUTPUT_DIR/live_web_assets.txt"
+echo "[+] Live web assets saved to $OUTPUT_DIR/live_web_assets.txt"
+
+# --- Phase 4: Targeted Port Scanning on Live Hosts ---
+echo "[*] Phase 4: Running Nmap SYN scan on discovered live hosts..."
+sed 's#https\?://##' "$OUTPUT_DIR/live_web_assets.txt" | awk '{print $1}' | sort -u > "$OUTPUT_DIR/hosts_for_nmap.txt"
+
+if [ "$NMAP_PORTS" = "-" ]; then
+    nmap -iL "$OUTPUT_DIR/hosts_for_nmap.txt" -p- -T4 --open -oN "$OUTPUT_DIR/nmap_scan_results.txt"
+else
+    nmap -iL "$OUTPUT_DIR/hosts_for_nmap.txt" -p "$NMAP_PORTS" -T4 --open -oN "$OUTPUT_DIR/nmap_scan_results.txt"
+fi
+
+echo "[+] Reconnaissance pipeline complete! All artifacts stored in /$OUTPUT_DIR"
